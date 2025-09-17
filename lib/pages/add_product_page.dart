@@ -2,12 +2,10 @@ import 'dart:io';
 import 'package:audio_hub_admin/controller/home_controller.dart';
 import 'package:audio_hub_admin/model/product/product.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get_state_manager/src/simple/get_state.dart';
+import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/cloudinary_service.dart';
 import '../widgets/drop_down_btn.dart';
-import 'package:get/get.dart';
-
 
 class AddProductPage extends StatefulWidget {
   final Product? product; // Optional for edit mode
@@ -27,19 +25,22 @@ class _AddProductPageState extends State<AddProductPage> {
   }
 
   void _initializeForm() {
-    if (widget.product != null) {
-      // Edit mode: populate form with product data
-      ctrl.productNameCtrl.text = widget.product!.name ?? '';
-      ctrl.productDescriptionCtrl.text = widget.product!.description ?? '';
-      ctrl.productImgCtrl.text = widget.product!.image ?? '';
-      ctrl.productPriceCtrl.text = widget.product!.price?.toString() ?? '';
-      ctrl.category = widget.product!.category ?? 'general';
-      ctrl.brand = widget.product!.brand ?? 'un branded';
-      ctrl.offer = widget.product!.offer ?? false;
-    } else {
-      // New product: reset form
-      ctrl.setValuesDefault();
-    }
+    // Defer form updates until after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.product != null) {
+        // Edit mode: populate form with product data
+        ctrl.productNameCtrl.text = widget.product!.name ?? '';
+        ctrl.productDescriptionCtrl.text = widget.product!.description ?? '';
+        ctrl.productImgCtrl.text = widget.product!.image ?? '';
+        ctrl.productPriceCtrl.text = widget.product!.price?.toString() ?? '';
+        ctrl.category = widget.product!.category ?? 'general';
+        ctrl.brand = widget.product!.brand ?? 'un branded';
+        ctrl.offer = widget.product!.offer ?? false;
+      } else {
+        // New product: reset form
+        ctrl.setValuesDefault();
+      }
+    });
   }
 
   Future<void> pickAndUploadImage() async {
@@ -187,8 +188,10 @@ class _AddProductPageState extends State<AddProductPage> {
                                 ctrl.updateProduct(widget.product!.id!);
                               }
                             },
-                            child: Text(widget.product == null ? 'Add Product' : 'Update Product',
-                                style: const TextStyle(fontSize: 18)),
+                            child: Text(
+                              widget.product == null ? 'Add Product' : 'Update Product',
+                              style: const TextStyle(fontSize: 18),
+                            ),
                           ),
                         ),
                       ],

@@ -103,7 +103,7 @@ class HomeController extends GetxController {
     }
   }
 
-  // Reset form controllers
+  // Reset form controllers safely
   setValuesDefault() {
     productNameCtrl.clear();
     productDescriptionCtrl.clear();
@@ -113,6 +113,10 @@ class HomeController extends GetxController {
     brand = 'un branded';
     offer = false;
     isFormReset = true;
-    update();
+
+    // Update safely after the first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      update();
+    });
   }
 }
