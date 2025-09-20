@@ -2,10 +2,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../model/product/product.dart';
+import '../model/order/order.dart' as my_order;
 
 class HomeController extends GetxController {
   FirebaseFirestore firestore = FirebaseFirestore.instance;
   late CollectionReference productCollection;
+  late CollectionReference orderCollection; // admin global orders
 
   TextEditingController productNameCtrl = TextEditingController();
   TextEditingController productDescriptionCtrl = TextEditingController();
@@ -17,18 +19,22 @@ class HomeController extends GetxController {
   bool offer = false;
 
   List<Product> products = [];
+  List<my_order.Order> orders = []; // admin sees all orders
 
-  // Track if form has been reset for new product
   bool isFormReset = false;
 
   @override
   Future<void> onInit() async {
     productCollection = firestore.collection('products');
+    orderCollection = firestore.collection('orders'); // admin global orders
     await fetchProducts();
+    await fetchOrders();
     super.onInit();
   }
 
-  // Add Product
+  // -----------------------------
+  // Product CRUD
+  // -----------------------------
   addProduct() {
     try {
       double price = double.tryParse(productPriceCtrl.text) ?? 0;
@@ -53,7 +59,6 @@ class HomeController extends GetxController {
     }
   }
 
-  // Update Product
   updateProduct(String id) async {
     try {
       double price = double.tryParse(productPriceCtrl.text) ?? 0;
@@ -75,7 +80,6 @@ class HomeController extends GetxController {
     }
   }
 
-  // Fetch Products
   fetchProducts() async {
     try {
       QuerySnapshot productSnapshot = await productCollection.get();
@@ -92,7 +96,6 @@ class HomeController extends GetxController {
     }
   }
 
-  // Delete Product
   deleteProduct(String id) async {
     try {
       await productCollection.doc(id).delete();
@@ -103,7 +106,6 @@ class HomeController extends GetxController {
     }
   }
 
-  // Reset form controllers safely
   setValuesDefault() {
     productNameCtrl.clear();
     productDescriptionCtrl.clear();
@@ -113,10 +115,65 @@ class HomeController extends GetxController {
     brand = 'un branded';
     offer = false;
     isFormReset = true;
-
-    // Update safely after the first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       update();
     });
+  }
+
+  // -----------------------------
+  // Orders CRUD
+  // -----------------------------
+  fetchOrders() async {
+    try {
+      QuerySnapshot orderSnapshot =
+      await orderCollection.orderBy('dateTime', descending: true).get();
+      final List<my_order.Order> retrievedOrders = orderSnapshot.docs
+          .map((doc) =>
+          my_order.Order.fromFirestore(doc.id, doc.data() as Map<String, dynamic>))
+          .toList();
+      orders.clear();
+      orders.assignAll(retrievedOrders);
+    } catch (e) {
+      Get.snackbar('Error', e.toString(), colorText: Colors.red);
+      print(e);
+    } finally {
+      update();
+    }
+  }
+
+  /// Update order status: Pending → Approved / Rejected
+  updateOrderStatus(String id, String status) async {
+    if (status.isEmpty) return;
+
+    // normalize to lowercase
+    status = status.toLowerCase();
+
+    if (!(status == 'approved' || status == 'rejected' || status == 'pending')) {
+      Get.snackbar('Error', 'Invalid status: $status', colorText: Colors.red);
+      return;
+    }
+
+    try {
+      // 1️⃣ Update global orders collection
+      await orderCollection.doc(id).update({'status': status});
+
+      // 2️⃣ Update user's subcollection order
+      final my_order.Order? order = orders.firstWhereOrNull((o) => o.id == id);
+
+      if (order != null && order.userId.isNotEmpty) {
+        await firestore
+            .collection('users')
+            .doc(order.userId)
+            .collection('orders')
+            .doc(id)
+            .update({'status': status});
+      }
+
+      Get.snackbar('Success', 'Order status updated to $status', colorText: Colors.green);
+      fetchOrders(); // refresh list
+    } catch (e) {
+      Get.snackbar('Error', e.toString(), colorText: Colors.red);
+      print(e);
+    }
   }
 }
